@@ -16,12 +16,7 @@ import sqlite3
 import argparse
 import shutil
 
-# Description: This experiments tests idle/resume by turning off
-# the screen and cutting off USB
-# REQUIRES DEVICE TO BE CONNECTED THROUGH MONSOON SO THAT PASSTHROUGH
-# CAN BE TURNED OFF. By default energy will be measured in this test.
-
-parser = argparse.ArgumentParser(description='IdleResume tests')
+parser = argparse.ArgumentParser(description='SystemUi tests')
 
 parser.add_argument('--out_prefix', dest='out_prefix', action='store', default='default',
                     help='prefix for out directory')
@@ -29,29 +24,55 @@ parser.add_argument('--out_prefix', dest='out_prefix', action='store', default='
 parser.add_argument('--collect', dest='collect', action='store', default='systrace',
                     help='what to collect (default systrace)')
 
+parser.add_argument('--test', dest='test_name', action='store',
+                    default='SystemUiJankTests#testNotificationListPull',
+                    help='which test to run')
+
 parser.add_argument('--duration', dest='duration_s', action='store',
-                    default=15, type=int,
-                    help='Duration of test (default 15s)')
+                    default=30, type=int,
+                    help='Duration of test (default 30s)')
+
+parser.add_argument('--iterations', dest='iterations', action='store',
+                    default=5, type=int,
+                    help='Duration of test (default 5s)')
 
 parser.add_argument('--serial', dest='serial', action='store',
                     help='Serial number of device to test')
 
+parser.add_argument('--all', dest='run_all', action='store_true',
+                    help='Run all tests')
+
 args = parser.parse_args()
 
-def experiment():
-    # Get workload
-    wload = Workload.getInstance(te, 'IdleResume')
-
-    outdir=te.res_dir + '_' + args.out_prefix
+def make_dir(outdir):
     try:
         shutil.rmtree(outdir)
     except:
-        print "couldn't remove " + outdir
+        print "coulnd't remove " + outdir
         pass
     os.makedirs(outdir)
 
-    # Run IdleResume
-    wload.run(outdir, duration_s=args.duration_s, collect=args.collect)
+def experiment():
+    def run_test(outdir, test_name):
+        te._log.info("Running test {}".format(test_name))
+        wload.run(outdir, test_name=test_name, iterations=args.iterations, collect=args.collect)
+
+    # Get workload
+    wload = Workload.getInstance(te, 'SystemUi')
+
+    outdir=te.res_dir + '_' + args.out_prefix
+    make_dir(outdir)
+
+    # Run SysUiBench
+    if args.run_all:
+        te._log.info("Running all tests: {}".format(wload.test_list))
+        for test in wload.get_test_list():
+            test_outdir = os.path.join(outdir, test)
+            make_dir(test_outdir)
+            run_test(test_outdir, test)
+    else:
+        run_test(outdir, args.test_name)
+
 
     # Dump platform descriptor
     te.platform_dump(te.res_dir)
@@ -75,13 +96,13 @@ my_conf = {
     # "device"       : "HT6880200489",
 
     # Folder where all the results will be collected
-    "results_dir" : "IdleResume",
+    "results_dir" : "SysUiBench",
 
     # Define devlib modules to load
     "modules"     : [
         'cpufreq',      # enable CPUFreq support
         'cpuidle',      # enable cpuidle support
-        # 'cgroups'     # Enable for cgroup support
+        # 'cgroups'       # Enable for cgroup support
     ],
 
     "emeter" : {
@@ -91,6 +112,10 @@ my_conf = {
 
     # Tools required by the experiments
     "tools"   : [ 'taskset'],
+
+    "systrace": {
+	    "extra_events" : [ 'sched_boost_task', 'sched_boost_cpu' ]
+    },
 
     "skip_nrg_model" : True,
 }
